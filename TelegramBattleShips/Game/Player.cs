@@ -21,6 +21,8 @@ namespace TelegramBattleShips.Game
 
         public User TelegramUser { get; private set; }
 
+        public Message LastSentTextMessage { get; set; }
+
         public int UserId => TelegramUser.Id;
 
         public int AliveFleet => Field.AliveFleet;

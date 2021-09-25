@@ -24,8 +24,8 @@ namespace TelegramBattleShips.Game
             Bot = bot ?? throw new ArgumentNullException(nameof(bot));
             Player1 = new Player(user1 ?? throw new ArgumentNullException(nameof(user1)));
 
-            SendMessageAsync(Player1.UserId, Player1.GetFieldImageStreamAsync(FieldView.Full).Result, "Твій флот").Wait();
-            SendMessageAsync(Player1.UserId, "Очікується другий грaвець...").Wait();
+            SendMessageAsync(Player1, Player1.GetFieldImageStreamAsync(FieldView.Full).Result, "Твій флот").Wait();
+            SendMessageAsync(Player1, "Очікується другий грaвець...").Wait();
 
             notifyTimer.Elapsed += NotifyTimer_Elapsed;
         }
@@ -35,7 +35,6 @@ namespace TelegramBattleShips.Game
         public Player Player2 { get; private set; }
         public bool IsPlayer1Turn { get; private set; } = true;
         public bool IsFinished { get; private set; }
-        public List<Message> SentMessages { get; private set; } = new List<Message>();
 
         public async Task SetSecondPlayerAsync(User user2)
         {
@@ -68,18 +67,23 @@ namespace TelegramBattleShips.Game
 
         public async Task HitAsync(User user, string cell)
         {
-            string activePlayerMessage;
-            string passivePlayerMessage;
-
-            if (!user.Id.Equals(ActivePlayer.UserId))
+            if (!TryRecognizePlayer(user, out var sender))
             {
-                await SendMessageAsync(user.Id, "Зараз не твій хід!");
                 return;
             }
 
+            string activePlayerMessage;
+            string passivePlayerMessage;
+
+            if (sender != ActivePlayer)
+            {
+                await SendMessageAsync(PassivePlayer, "Зараз не твій хід!");
+                return;
+            }
+           
             if (IsFinished)
             {
-                await SendMessageAsync(user.Id, "Гру вже завершено!");
+                await SendMessageAsync(sender, "Гру вже завершено!");
             }
 
             var isHit = false;
@@ -137,6 +141,13 @@ namespace TelegramBattleShips.Game
             }
         }
 
+        public bool TryRecognizePlayer(User user, out Player player)
+        {
+            player = user.Id == ActivePlayer.UserId ? ActivePlayer : user.Id == PassivePlayer.UserId ? PassivePlayer : default;
+
+            return player != default;
+        }
+
         private Task<Stream> GetActivePlayerFieldImageAsync(FieldView view) => ActivePlayer.GetFieldImageStreamAsync(view);
 
         private Task<Stream> GetPassivePlayerImageAsync(FieldView view) => PassivePlayer.GetFieldImageStreamAsync(view);
@@ -149,10 +160,10 @@ namespace TelegramBattleShips.Game
         {
             await DeleteSentMessagesAsync();
 
-            await SendMessageAsync(ActivePlayer.UserId, await GetPassivePlayerImageAsync(FieldView.Restricted), 
+            await SendMessageAsync(ActivePlayer, await GetPassivePlayerImageAsync(FieldView.Restricted), 
                 activePlayerCaption.Replace("{0}", PassivePlayer.Name), GetAvailableHitsKeyboard());
 
-            await SendMessageAsync(PassivePlayer.UserId, await GetPassivePlayerImageAsync(FieldView.Full), 
+            await SendMessageAsync(PassivePlayer, await GetPassivePlayerImageAsync(FieldView.Full), 
                 passivePlayerCaption.Replace("{0}", ActivePlayer.Name));
         }
 
@@ -160,43 +171,47 @@ namespace TelegramBattleShips.Game
         {
             await DeleteSentMessagesAsync();
 
-            await SendMessageAsync(PassivePlayer.UserId, await GetActivePlayerFieldImageAsync(FieldView.Full),
+            await SendMessageAsync(PassivePlayer, await GetActivePlayerFieldImageAsync(FieldView.Full),
                 $"Флот гравця {ActivePlayer.Name}");
         }
 
-        private Task SendActivePlayerMessage(string message) => SendMessageAsync(ActivePlayer.UserId, message);
+        private Task SendActivePlayerMessage(string message) => SendMessageAsync(ActivePlayer, message);
 
-        private Task SendPassivePlayerMessage(string message) => SendMessageAsync(PassivePlayer.UserId, message);
+        private Task SendPassivePlayerMessage(string message) => SendMessageAsync(PassivePlayer, message);
 
-        private async Task SendMessageAsync(int userId, string text)
+        private async Task SendMessageAsync(Player player, string text)
         {
-            var message = await Bot.SendTextMessageAsync(userId, text);
+            var message = await Bot.SendTextMessageAsync(player.UserId, text);
 
-            SentMessages.Add(message);
+            player.LastSentTextMessage = message;
         }
 
-        private async Task SendMessageAsync(int userId, Stream stream, string caption, IReplyMarkup replyMarkup = null)
+        private async Task SendMessageAsync(Player player, Stream stream, string caption, IReplyMarkup replyMarkup = null)
         {
-            var message = await Bot.SendPhotoAsync(userId, stream, caption, replyMarkup: replyMarkup);
+            var message = await Bot.SendPhotoAsync(player.UserId, stream, caption, replyMarkup: replyMarkup);
 
-            SentMessages.Add(message);
+            player.LastSentTextMessage = message;
         }
 
         private async Task DeleteSentMessagesAsync()
         {
-            foreach (var m in SentMessages)
+            try
             {
-                try
-                {
-                    await Bot.DeleteMessageAsync(m.Chat.Id, m.MessageId);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("An error occurred while deleting a message: " + e.Message);
-                }
+                await Bot.DeleteMessageAsync(ActivePlayer.UserId, ActivePlayer.LastSentTextMessage.MessageId);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("An error occurred while deleting a message: " + e.Message);
             }
 
-            SentMessages = new List<Message>();
+            try
+            {
+                await Bot.DeleteMessageAsync(PassivePlayer.UserId, PassivePlayer.LastSentTextMessage.MessageId);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("An error occurred while deleting a message: " + e.Message);
+            }
         }
 
         private async void NotifyTimer_Elapsed(object sender, ElapsedEventArgs e)

@@ -24,8 +24,8 @@ namespace TelegramBattleShips.Game
             Bot = bot ?? throw new ArgumentNullException(nameof(bot));
             Player1 = new Player(user1 ?? throw new ArgumentNullException(nameof(user1)));
 
-            SendMessageAsync(Player1, Player1.GetFieldImageStreamAsync(FieldView.Full).Result, "Твій флот").Wait();
-            SendMessageAsync(Player1, "Очікується другий грaвець...").Wait();
+            SendImageMessageAsync(Player1, Player1.GetFieldImageStreamAsync(FieldView.Full).Result, "Твій флот").Wait();
+            SendTextMessageAsync(Player1, "Очікується другий грaвець...").Wait();
 
             notifyTimer.Elapsed += NotifyTimer_Elapsed;
         }
@@ -77,13 +77,13 @@ namespace TelegramBattleShips.Game
 
             if (sender != ActivePlayer)
             {
-                await SendMessageAsync(PassivePlayer, "Зараз не твій хід!");
+                await SendTextMessageAsync(PassivePlayer, "Зараз не твій хід!");
                 return;
             }
            
             if (IsFinished)
             {
-                await SendMessageAsync(sender, "Гру вже завершено!");
+                await SendTextMessageAsync(sender, "Гру вже завершено!");
             }
 
             var isHit = false;
@@ -158,59 +158,78 @@ namespace TelegramBattleShips.Game
 
         private async Task UpdateAsync(string activePlayerCaption = "Флот гравця {0}", string passivePlayerCaption = "Твій флот. Очікується хід гравця {0}")
         {
-            await DeleteSentMessagesAsync();
+            await DeletePlayerMessageAsync(ActivePlayer, true);
+            await DeletePlayerMessageAsync(PassivePlayer, true);
 
-            await SendMessageAsync(ActivePlayer, await GetPassivePlayerImageAsync(FieldView.Restricted), 
+            await SendImageMessageAsync(ActivePlayer, await GetPassivePlayerImageAsync(FieldView.Restricted), 
                 activePlayerCaption.Replace("{0}", PassivePlayer.Name), GetAvailableHitsKeyboard());
 
-            await SendMessageAsync(PassivePlayer, await GetPassivePlayerImageAsync(FieldView.Full), 
+            await SendImageMessageAsync(PassivePlayer, await GetPassivePlayerImageAsync(FieldView.Full), 
                 passivePlayerCaption.Replace("{0}", ActivePlayer.Name));
         }
 
         private async Task FinalUpdateAsync()
         {
-            await DeleteSentMessagesAsync();
+            await DeletePlayerMessageAsync(PassivePlayer, true);
 
-            await SendMessageAsync(PassivePlayer, await GetActivePlayerFieldImageAsync(FieldView.Full),
+            await SendImageMessageAsync(PassivePlayer, await GetActivePlayerFieldImageAsync(FieldView.Full),
                 $"Флот гравця {ActivePlayer.Name}");
         }
 
-        private Task SendActivePlayerMessage(string message) => SendMessageAsync(ActivePlayer, message);
+        private Task SendActivePlayerMessage(string message) => SendTextMessageAsync(ActivePlayer, message);
 
-        private Task SendPassivePlayerMessage(string message) => SendMessageAsync(PassivePlayer, message);
+        private Task SendPassivePlayerMessage(string message) => SendTextMessageAsync(PassivePlayer, message);
 
-        private async Task SendMessageAsync(Player player, string text)
+        private async Task SendTextMessageAsync(Player player, string text)
         {
+            await DeletePlayerMessageAsync(player);
+
             var message = await Bot.SendTextMessageAsync(player.UserId, text);
 
             player.LastSentTextMessage = message;
         }
 
-        private async Task SendMessageAsync(Player player, Stream stream, string caption, IReplyMarkup replyMarkup = null)
+        private async Task SendImageMessageAsync(Player player, Stream stream, string caption, IReplyMarkup replyMarkup = null)
         {
+            await DeletePlayerMessageAsync(player, withImage: true);
+
             var message = await Bot.SendPhotoAsync(player.UserId, stream, caption, replyMarkup: replyMarkup);
 
-            player.LastSentTextMessage = message;
+            player.LastSentImageMessage = message;
         }
 
-        private async Task DeleteSentMessagesAsync()
+        private async Task DeletePlayerMessageAsync(Player player, bool withImage = false)
         {
-            try
+            if (player.LastSentTextMessage != null)
             {
-                await Bot.DeleteMessageAsync(ActivePlayer.UserId, ActivePlayer.LastSentTextMessage.MessageId);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("An error occurred while deleting a message: " + e.Message);
+                try
+                {
+                    await Bot.DeleteMessageAsync(player.UserId, player.LastSentTextMessage.MessageId);
+                }
+                catch
+                {
+                    // TODO: add logging later
+                }
+                finally
+                {
+                    player.LastSentTextMessage = null;
+                }
             }
 
-            try
+            if (withImage && player.LastSentImageMessage != null)
             {
-                await Bot.DeleteMessageAsync(PassivePlayer.UserId, PassivePlayer.LastSentTextMessage.MessageId);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("An error occurred while deleting a message: " + e.Message);
+                try
+                {
+                    await Bot.DeleteMessageAsync(player.UserId, player.LastSentImageMessage.MessageId);
+                }
+                catch
+                {
+                    // TODO: add logging later
+                }
+                finally
+                {
+                    player.LastSentImageMessage = null;
+                }
             }
         }
 
@@ -238,7 +257,8 @@ namespace TelegramBattleShips.Game
 
         public async void Dispose()
         {
-            await DeleteSentMessagesAsync();
+            await DeletePlayerMessageAsync(ActivePlayer, true);
+            await DeletePlayerMessageAsync(PassivePlayer, true);
         }
     }
 }

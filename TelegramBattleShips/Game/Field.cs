@@ -6,7 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using TelegramBattleShips.Game.Enums;
-using TelegramBattleShips.Game.Exceptions;
 
 namespace TelegramBattleShips.Game
 {

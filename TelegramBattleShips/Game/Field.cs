@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using TelegramBattleShips.Game.Enums;
+using TelegramBattleShips.Game.Extensions;
 
 namespace TelegramBattleShips.Game
 {
@@ -113,44 +114,21 @@ namespace TelegramBattleShips.Game
 
             while (!isLocated)
             {
-                var isHorizontal = _rnd.NextDouble() > 0.5;
+                var orientation = _rnd.NextDouble() > 0.5 ? Orientation.Vertical : Orientation.Horizontal;
+                var x = orientation.IsHorizontal() ? _rnd.Next(0, Cols - shipSize) : _rnd.Next(0, Cols);
+                var y = orientation.IsHorizontal() ? _rnd.Next(0, Rows) : _rnd.Next(0, Rows - shipSize);
 
-                if (isHorizontal)
-                {
-                    var x = _rnd.Next(0, Cols - shipSize);
-                    var y = _rnd.Next(0, Rows);
+                if (!IsValidLocation(x, y, orientation, shipSize)) continue;
 
-                    if (!IsValidLocation(x, y, true, shipSize)) continue;
+                ships.Add(new Ship(_field, shipType, x, y, orientation));
 
-                    var positions = Enumerable
-                        .Range(0, shipSize)
-                        .Select(i => (x + i, y))
-                        .ToArray();
-
-                    ships.Add(new Ship(_field, positions));
-
-                    isLocated = true;
-                }
-                else
-                {
-                    var x = _rnd.Next(0, Cols);
-                    var y = _rnd.Next(0, Rows - shipSize);
-
-                    if (!IsValidLocation(x, y, false, shipSize)) continue;
-
-                    for (int i = 0; i < shipSize; i++)
-                    {
-                        _field[x, y + i] = CellState.AliveShip;
-                    }
-
-                    isLocated = true;
-                }
+                isLocated = true;
             }
         }
 
-        private bool IsValidLocation(int x, int y, bool isHorizontal, int shipSize)
+        private bool IsValidLocation(int x, int y, Orientation orientation, int shipSize)
         {
-            if (isHorizontal)
+            if (orientation.IsHorizontal())
             {
                 for (int i = -1; i <= shipSize + 1; i++)
                 {

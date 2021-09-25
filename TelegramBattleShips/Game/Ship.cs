@@ -1,6 +1,6 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using TelegramBattleShips.Game.Enums;
+using TelegramBattleShips.Game.Extensions;
 
 namespace TelegramBattleShips.Game
 {
@@ -8,17 +8,22 @@ namespace TelegramBattleShips.Game
     {
         private readonly CellState[,] _map;
         public ShipType ShipType { get; }
-        public bool IsHorizontal { get; }
+        public Orientation Orientation { get; }
         public bool IsAlive { get; private set; } = true;
         public int AliveCells => Cells.Count(c => c.State == CellState.AliveShip);
         private ShipCell[] Cells { get; }
 
-        public Ship(CellState[,] map, (int row, int col)[] positions)
+        public Ship(CellState[,] map, ShipType shipType, int x, int y, Orientation orientation)
         {
             _map = map;
-            ShipType = (ShipType)positions.Length;
-            Cells = positions.Select(p => new ShipCell(p.row, p.col)).ToArray();
-            IsHorizontal = positions.All(p => p.row == positions.First().row);
+            ShipType = shipType;
+            Cells = Enumerable
+                .Range(0, (int) shipType).Select(i => orientation.IsHorizontal() ? 
+                    new ShipCell(x++, y) : 
+                    new ShipCell(x, y++))
+                .ToArray();
+
+            Orientation = orientation;
 
             Cells.ToList().ForEach(c => _map[c.Row, c.Col] = c.State);
         }

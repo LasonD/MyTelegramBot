@@ -3,7 +3,6 @@ using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using DAL;
 using DAL.Data;
@@ -29,13 +28,18 @@ namespace TelegramBotConsole
         private static readonly Dictionary<Chat, HangGame> Games = new Dictionary<Chat, HangGame>();
         private static readonly GameDispatcher Dispatcher = new GameDispatcher(Bot);
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             Bot.OnMessage += TryOnMessageReceived;
 
             Bot.StartReceiving();
             Console.ReadLine();
+
             Bot.StopReceiving();
+
+            Dispatcher.Dispose();
+
+            await NotifyPlayersAboutShutdown();
         }
 
         private static async void TryOnMessageReceived(object sender, MessageEventArgs e)
@@ -46,6 +50,14 @@ namespace TelegramBotConsole
             } catch (Exception ex)
             {
                 await Bot.SendTextMessageAsync(e.Message.Chat, ex.Message);
+            }
+        }
+
+        private static async Task NotifyPlayersAboutShutdown()
+        {
+            foreach (var player in Dispatcher.CurrentPlayers)
+            {
+                await Bot.SendTextMessageAsync(player.Id, $"Хост завершив роботу бота. Дякую за гру, {player.FirstName} 😉");
             }
         }
 

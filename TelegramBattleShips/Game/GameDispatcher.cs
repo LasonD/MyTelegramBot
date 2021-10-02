@@ -18,14 +18,11 @@ namespace TelegramBattleShips.Game
         private readonly TelegramDbContext _context = DbContextSingletone.GetContext();
         private readonly ITelegramBotClient _bot;
 
-        public GameDispatcher(ITelegramBotClient bot)
-        {
-            _bot = bot ?? throw new ArgumentNullException(nameof(bot));
-        }
+        public GameDispatcher(ITelegramBotClient bot) => _bot = bot ?? throw new ArgumentNullException(nameof(bot));
 
         private ConcurrentDictionary<User, TelegramBattleShips> Games { get; } = new ConcurrentDictionary<User, TelegramBattleShips>();
 
-        public Dictionary<int, BlockingCollection<Message>> SentMessages { get; private set; } = new Dictionary<int, BlockingCollection<Message>>();
+        private Dictionary<int, BlockingCollection<Message>> SentMessages { get; set; } = new Dictionary<int, BlockingCollection<Message>>();
 
         public async Task<bool> TryProcessMessageAsync(User user, string message)
         {
@@ -46,31 +43,43 @@ namespace TelegramBattleShips.Game
             return false;
         }
 
+        public IEnumerable<User> CurrentPlayers => Games.Keys;
+
         private async Task ProcessStartNewGameCommandAsync(User user)
         {
+            IEnumerable<(User player, TelegramBattleShips game)> usersAndGamesWaitingForSecondPlayer;
+
             if (Games.TryGetValue(user, out var g))
             {
                 if (g.IsFinished)
                 {
-                    Games[user] = new TelegramBattleShips(_bot, user);
+                    usersAndGamesWaitingForSecondPlayer = GetPlayersWaitingForSecondPlayerWithGames();
+
+                    if (usersAndGamesWaitingForSecondPlayer.Any())
+                    {
+                        var (_, game) = usersAndGamesWaitingForSecondPlayer.First();
+
+                        await SetSecondPlayerToGameAsync(game, user);
+                    }
+                    else
+                    {
+                        Games[user] = new TelegramBattleShips(_bot, user);
+                    }
+
+                    return;
                 }
 
                 await SendMessageAsync(user, "Ти вже маєш розпочату гру!");
                 return;
             }
 
-            var usersAndGamesWaitingForSecondPlayer = Games
-                .Where(kvp => Games.Values.Count(g => kvp.Value == g) == 1)
-                .ToList();
+            usersAndGamesWaitingForSecondPlayer = GetPlayersWaitingForSecondPlayerWithGames();
 
             if (usersAndGamesWaitingForSecondPlayer.Any())
             {
                 var (waitingPlayer, game) = usersAndGamesWaitingForSecondPlayer.First();
 
-                Games[user] = game;
-
-                await game.SetSecondPlayerAsync(user);
-                await SendMessageAsync(waitingPlayer, $"Користувач {user.FirstName} {user.LastName} приєднався до гри.\nТвій хід.");
+                await SetSecondPlayerToGameAsync(game, user);
             }
             else
             {
@@ -80,6 +89,22 @@ namespace TelegramBattleShips.Game
             }
         }
 
+        private async Task SetSecondPlayerToGameAsync(TelegramBattleShips game, User player2)
+        {
+            if (game.Player2 != null) throw new InvalidOperationException("Second player is already set for game.");
+            if (game.Player1 == null) throw new InvalidOperationException("First player is not set for game.");
+
+            Games[player2] = game;
+
+            await game.SetSecondPlayerAsync(player2);
+            await SendMessageAsync(game.Player1.TelegramUser, $"Користувач {player2.FirstName} {player2.LastName} приєднався до гри.\nТвій хід.");
+        }
+
+        private List<(User player, TelegramBattleShips game)> GetPlayersWaitingForSecondPlayerWithGames() => Games
+            .Where(kvp => Games.Values.Count(g => kvp.Value == g) == 1)
+            .Select(p => (p.Key, p.Value))
+            .ToList();
+
         private async Task NotifyAboutWaitingGameAsync(User waitingPlayer)
         {
             foreach (var user in _context.TelegramUsers.Where(u => !u.UserId.Equals(waitingPlayer.Id)))
@@ -88,7 +113,7 @@ namespace TelegramBattleShips.Game
                 {
                     await SendMessageAsync((int)user.UserId,
                         $"Користувач {waitingPlayer.FirstName} {waitingPlayer.LastName} очікує " +
-                        $"другого гравця в морський бій. Щоб приєднатись, введи команду {StartGameCommand}");
+                        $"іншого гравця в морський бій. Щоб приєднатись, введи команду {StartGameCommand}");
                 }
                 catch
                 {
@@ -120,7 +145,7 @@ namespace TelegramBattleShips.Game
             SentMessages[id].Add(message);
         }
 
-        private async Task DeleteSentMessagesAsync(User user = null)
+        private async Task DeleteSentMessagesAsync(User user)
         {
             if (SentMessages.TryGetValue(user.Id, out var messages))
             {
@@ -130,6 +155,14 @@ namespace TelegramBattleShips.Game
                 }
 
                 SentMessages[user.Id] = new BlockingCollection<Message>();
+            }
+        }
+
+        private async Task DeleteSentMessagesAsync()
+        {
+            foreach (var user in CurrentPlayers)
+            {
+                await DeleteSentMessagesAsync(user);
             }
         }
 

@@ -15,8 +15,8 @@ namespace TelegramBattleShips.Game
     {
         private const int ButtonsInRow = 5;
         private const int TimerIntervalMs = 15_000;
-        private readonly Timer notifyTimer = new Timer(TimerIntervalMs) { AutoReset = true };
-        private readonly double TimeoutOffsetMs = 60_000;
+        private Timer notifyTimer = new Timer(TimerIntervalMs);
+        private readonly double TimeoutOffsetMs = 15_000;
         private double elapsedMs = 0;
 
         public TelegramBattleShips(ITelegramBotClient bot, User user1)
@@ -41,7 +41,8 @@ namespace TelegramBattleShips.Game
             notifyTimer.Enabled = true;
 
             Player2 = new Player(user2);
-            await UpdateAsync();
+            await UpdateAsync($"Гравець {PassivePlayer.Name} приєднався до гри. Його флот",
+                $"Ти приєднався до гри, твій суперник - {ActivePlayer.Name}. Очікується його хід");
         }
 
         public ReplyKeyboardMarkup GetAvailableHitsKeyboard()
@@ -86,7 +87,7 @@ namespace TelegramBattleShips.Game
                 await SendTextMessageAsync(sender, "Гру вже завершено!");
             }
 
-            var isHit = false;
+            bool isHit;
 
             try
             {
@@ -98,8 +99,8 @@ namespace TelegramBattleShips.Game
                 return;
             }
 
-            elapsedMs = 0;
-            notifyTimer.Interval = TimerIntervalMs;
+            RefreshTimer();
+
             if (isHit)
             {
                 if (PassivePlayer.AliveFleet == 0)
@@ -200,7 +201,7 @@ namespace TelegramBattleShips.Game
 
         private async Task DeletePlayerMessageAsync(Player player, bool withImage = false)
         {
-            if (player.LastSentTextMessage != null)
+            if (player?.LastSentTextMessage != null)
             {
                 try
                 {
@@ -235,28 +236,45 @@ namespace TelegramBattleShips.Game
 
         private async void NotifyTimer_Elapsed(object sender, ElapsedEventArgs e)
         {
-            //elapsedMs += notifyTimer.Interval;
+            if (notifyTimer == null) return;
 
-            //if (elapsedMs >= TimeoutOffsetMs)
-            //{
-            //    IsFinished = true;
-            //    await FinalUpdateAsync();
-            //    await SendActivePlayerMessage($"На жаль, ти здався й отримав поразку! 😱 Переміг гравець {PassivePlayer.Name}");
-            //    await SendPassivePlayerMessage($"Вітаю, гравець {ActivePlayer.Name} здався, а тому ти отримав перемогу!");
+             elapsedMs += notifyTimer.Interval;
 
-            //    await Task.Delay(5_000);
+            if (elapsedMs >= TimeoutOffsetMs)
+            {
+                IsFinished = true;
+                notifyTimer.Elapsed -= NotifyTimer_Elapsed;
 
-            //    Dispose();
-            //}
+                await FinalUpdateAsync();
+                await SendActivePlayerMessage($"На жаль, ти здався й отримав поразку! 😱 Переміг гравець {PassivePlayer.Name}");
+                await SendPassivePlayerMessage($"Вітаю, гравець {ActivePlayer.Name} здався, а тому ти отримав перемогу!");
 
-            //var remainingSec = (int)((TimeoutOffsetMs - elapsedMs) / 1000);
+                await Task.Delay(5_000);
 
-            //await SendActivePlayerMessage($"{PassivePlayer.Name} очікує твій хід, поспіши, або гра завершиться через {remainingSec} секунд");
-            //await SendPassivePlayerMessage($"Очікуй хід гравця {ActivePlayer.Name}. У нього залишилось {remainingSec} секунд");
+                Dispose();
+
+                return;
+            }
+
+            notifyTimer.Start();
+
+            var remainingSec = (int)((TimeoutOffsetMs - elapsedMs) / 1000);
+
+            await SendActivePlayerMessage($"{PassivePlayer.Name} очікує твій хід, поспіши, або гра завершиться через {remainingSec} секунд");
+            await SendPassivePlayerMessage($"Очікуй хід гравця {ActivePlayer.Name}. У нього залишилось {remainingSec} секунд");
+        }
+
+        private void RefreshTimer()
+        {
+            notifyTimer = new Timer(TimerIntervalMs) { Enabled = true };
+            elapsedMs = 0;
         }
 
         public async void Dispose()
         {
+            notifyTimer.Stop();
+            notifyTimer.Dispose();
+            notifyTimer = null;
             await DeletePlayerMessageAsync(ActivePlayer, true);
             await DeletePlayerMessageAsync(PassivePlayer, true);
         }

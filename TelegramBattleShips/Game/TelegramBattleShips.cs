@@ -18,8 +18,9 @@ namespace TelegramBattleShips.Game
         private readonly TelegramDbContext _context;
         private const int ButtonsInRow = 5;
         private const int TimerIntervalMs = 15_000;
+        private const double TimeoutOffsetMs = 60_000;
         private readonly Timer _notifyTimer = new Timer(TimerIntervalMs);
-        private readonly double TimeoutOffsetMs = 60_000;
+        private readonly Timer _joinTimeoutTimer = new Timer(TimeoutOffsetMs);
         private double _elapsedMs = 0;
         private bool _disposed;
 
@@ -33,6 +34,19 @@ namespace TelegramBattleShips.Game
             SendTextMessageAsync(Player1, "Очікується інший грaвець...").Wait();
 
             _notifyTimer.Elapsed += NotifyTimer_Elapsed;
+            _joinTimeoutTimer.Start();
+            _joinTimeoutTimer.Elapsed += OnJoinTimeoutReachedHandler;
+        }
+
+        private async void OnJoinTimeoutReachedHandler(object sender, ElapsedEventArgs e)
+        {
+            IsFinished = true;
+
+            await SendTextMessageAsync(Player1, "В даний час немає активних гравців. Спробуй пізніше.");
+
+            await Task.Delay(5_000);
+
+            Finish?.Invoke(this, EventArgs.Empty);
         }
 
         public event EventHandler Finish;
@@ -46,6 +60,8 @@ namespace TelegramBattleShips.Game
         public async Task SetSecondPlayerAsync(User user2)
         {
             _notifyTimer.Enabled = true;
+            _joinTimeoutTimer.Elapsed -= OnJoinTimeoutReachedHandler;
+            _joinTimeoutTimer.Enabled = false;
 
             Player2 = new Player(user2);
             await UpdateAsync($"Гравець {PassivePlayer.Name} приєднався до гри. Його флот",

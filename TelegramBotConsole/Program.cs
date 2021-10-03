@@ -72,8 +72,6 @@ namespace TelegramBotConsole
             var chat = msg.Chat;
             var user = msg.From;
 
-            await Dispatcher.TryProcessMessageAsync(user, msgText);
-
             var game = Games.FirstOrDefault(x => x.Key.Id == chat.Id).Value;
             switch (msgText.Split('@')[0])
             {

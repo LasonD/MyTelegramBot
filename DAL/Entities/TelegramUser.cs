@@ -24,6 +24,8 @@ namespace DAL.Entities
         public string Username { get; set; }
         public string FirstName { get; set; }
         public string LastName { get; set; }
+        public int BattleShipGamesWon { get; set; }
+        public int ShipUnitsDestroyed { get; set; }
         public List<TelegramMessage> Messages { get; set; } = new List<TelegramMessage>();
         public override string ToString() => JsonConvert.SerializeObject(this,
             new JsonSerializerSettings()

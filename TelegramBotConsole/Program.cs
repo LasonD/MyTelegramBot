@@ -76,7 +76,7 @@ namespace TelegramBotConsole
             switch (msgText.Split('@')[0])
             {
                 case "/start":
-                    await Bot.SendTextMessageAsync(chat, string.Join("\n", GameDispatcher.Commands));
+                    await Bot.SendTextMessageAsync(chat, string.Join("\n", GameDispatcher.CommandsWithDescriptions));
                     break;
                 case "/startgame":
                     if (game != null)

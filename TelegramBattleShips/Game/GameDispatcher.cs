@@ -38,6 +38,13 @@ namespace TelegramBattleShips.Game
 
         public static string[] Commands => new[] { StartGameCommand, BattleShipsLeaderBoardCommand, MyStatisticsCommand };
 
+        public static string[] CommandsWithDescriptions => new[]
+        {
+            $"{StartGameCommand} - розпочати нову гру або приєднатися до існуючої;", 
+            $"{BattleShipsLeaderBoardCommand} - топ 10 гравців;", 
+            $"{MyStatisticsCommand} - моя статистика;"
+        };
+
         private async void OnMessageHandler(object sender, MessageEventArgs e)
         {
             try

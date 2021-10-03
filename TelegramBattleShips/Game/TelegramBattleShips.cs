@@ -274,7 +274,7 @@ namespace TelegramBattleShips.Game
                 }
             }
 
-            if (withImage && player.LastSentImageMessage != null)
+            if (player != null && withImage && player.LastSentImageMessage != null)
             {
                 try
                 {

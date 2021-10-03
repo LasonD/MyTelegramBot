@@ -40,31 +40,38 @@ namespace TelegramBattleShips.Game
 
         private async void OnMessageHandler(object sender, MessageEventArgs e)
         {
-            var msg = e.Message;
-
-            if (msg.Type != MessageType.Text) return;
-
-            var text = msg.Text;
-            var user = msg.From;
-
-            if (text.Equals(StartGameCommand, StringComparison.OrdinalIgnoreCase))
+            try
             {
-                await ProcessStartNewGameCommandAsync(user);
+                var msg = e.Message;
+
+                if (msg.Type != MessageType.Text) return;
+
+                var text = msg.Text;
+                var user = msg.From;
+
+                if (text.Equals(StartGameCommand, StringComparison.OrdinalIgnoreCase))
+                {
+                    await ProcessStartNewGameCommandAsync(user);
+                }
+
+                if (text.StartsWith(HitCommandPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    await ProcessHitCommandAsync(user, text);
+                }
+
+                if (text.Equals(BattleShipsLeaderBoardCommand, StringComparison.OrdinalIgnoreCase))
+                {
+                    await ProcessLeaderBoardCommandAsync(user);
+                }
+
+                if (text.Equals(MyStatisticsCommand, StringComparison.OrdinalIgnoreCase))
+                {
+                    await ProcessMyStatisticsCommandAsync(user);
+                }
             }
-
-            if (text.StartsWith(HitCommandPrefix, StringComparison.OrdinalIgnoreCase))
+            catch
             {
-                await ProcessHitCommandAsync(user, text);
-            }
-
-            if (text.Equals(BattleShipsLeaderBoardCommand, StringComparison.OrdinalIgnoreCase))
-            {
-                await ProcessLeaderBoardCommandAsync(user);
-            }
-
-            if (text.Equals(MyStatisticsCommand, StringComparison.OrdinalIgnoreCase))
-            {
-                await ProcessMyStatisticsCommandAsync(user);
+                // TODO: add logging
             }
         }
 
@@ -114,8 +121,8 @@ namespace TelegramBattleShips.Game
                 .ThenByDescending(x => x.BattleShipGamesWon + x.EnemySurrendedWons)
                 .Take(10)
                 .AsEnumerable()
-                .Select((x, i) => $"<b>{PlaceEmoji[i]} {x.FirstName} {x.LastName}</b>\t\nВорожих юнітів знищено: <b>{x.ShipUnitsDestroyed}</b>" +
-                                  $"\t\nВиграшів: <b>{x.BattleShipGamesWon + x.EnemySurrendedWons}</b> {(x.EnemySurrendedWons > 0 ? $" (з них <b>{x.EnemySurrendedWons}</b> через здачу противника)" : "")}\n")
+                .Select((x, i) => $"<b>{PlaceEmoji[i]} {x.FirstName} {x.LastName}</b>\t\n• Ворожих юнітів знищено: <b>{x.ShipUnitsDestroyed}</b>" +
+                                  $"\t\n• Виграшів: <b>{x.BattleShipGamesWon + x.EnemySurrendedWons}</b> {(x.EnemySurrendedWons > 0 ? $" (з них <b>{x.EnemySurrendedWons}</b> через здачу противника)" : "")}\n")
                 .Prepend("<b><i>🏆Топ 10 гравців🏆</i></b>\n")
                 .ToList();
 

@@ -60,7 +60,7 @@ namespace TelegramBattleShips.Game
                 }
             }
 
-            return identifiers.OrderBy(x => x);
+            return identifiers.OrderBy(x => x, new CellIdentifierComparer());
         }
 
         public bool Hit(string cell)
@@ -258,6 +258,27 @@ namespace TelegramBattleShips.Game
             graph.DrawString(identifier,
                 new Font(FontFamily.GenericSansSerif, EmSize, FontStyle.Regular, GraphicsUnit.Pixel),
                 Brushes.CadetBlue, cell);
+        }
+
+        private class CellIdentifierComparer : IComparer<string>
+        {
+            public int Compare(string x, string y)
+            {
+                x ??= string.Empty;
+                y ??= string.Empty;
+
+                if (x.Length == 3 && x[0] == y[0])
+                {
+                    return 1;
+                }
+
+                if (y.Length == 3 && x[0] == y[0])
+                {
+                    return -1;
+                }
+
+                return string.Compare(x, y, StringComparison.Ordinal);
+            }
         }
     }
 }

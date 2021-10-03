@@ -17,11 +17,13 @@ namespace TelegramBattleShips.Game
     {
         private const string StartGameCommand = "/startseabattle";
         private const string HitCommandPrefix = "/hit ";
+        private const string BattleShipsLeaderBoardCommand = "/leaderboard";
+        private const string ClearCommand = "/clear";
 
         private readonly TelegramDbContext _context = DbContextSingletone.GetContext();
         private readonly ITelegramBotClient _bot;
-        private readonly object _locker = new object();
         private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1);
+        private readonly string[] PlaceEmoji = { "🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟" };
 
         public GameDispatcher(ITelegramBotClient bot)
         {
@@ -50,6 +52,34 @@ namespace TelegramBattleShips.Game
             if (text.StartsWith(HitCommandPrefix, StringComparison.OrdinalIgnoreCase))
             {
                 await ProcessHitCommandAsync(user, text);
+            }
+
+            if (text.Equals(BattleShipsLeaderBoardCommand, StringComparison.OrdinalIgnoreCase))
+            {
+                await ProcessLeaderBoardCommandAsync(user);
+            }
+        }
+
+        private async Task ProcessLeaderBoardCommandAsync(User user)
+        {
+            var leaders = _context
+                .TelegramUsers
+                .Where(x => x.BattleShipGamesWon > 0 || x.ShipUnitsDestroyed > 0)
+                .OrderByDescending(x => x.BattleShipGamesWon)
+                .ThenByDescending(x => x.ShipUnitsDestroyed)
+                .Take(10)
+                .AsEnumerable()
+                .Select((x, i) => $"<b>{PlaceEmoji[i]}. {x.FirstName} {x.LastName}</b>\tворожих юнітів знищено: <b>{x.ShipUnitsDestroyed}</b>\tвиграшів: <b>{x.BattleShipGamesWon}</b>")
+                .Prepend("Топ 10 гравців")
+                .ToList();
+
+            if (!leaders.Any())
+            {
+                await _bot.SendTextMessageAsync(user.Id, "Таблиця лідерів поки що пуста.\nТи можеш це змінити!😊");
+            }
+            else
+            {
+                await _bot.SendTextMessageAsync(user.Id, string.Join("\n", leaders), ParseMode.Html);
             }
         }
 
@@ -93,7 +123,7 @@ namespace TelegramBattleShips.Game
                 }
                 else
                 {
-                    var newGame = new TelegramBattleShips(_bot, user);
+                    var newGame = new TelegramBattleShips(_bot, user, _context);
                     Games[user] = newGame;
                     newGame.Finish += OnGameFinishedHandler;
 
@@ -168,6 +198,7 @@ namespace TelegramBattleShips.Game
             if (!Games.ContainsKey(user))
             {
                 await SendMessageAsync(user, "Ти не маєш розпочатої гри!");
+                return;
             }
 
             var game = Games[user];

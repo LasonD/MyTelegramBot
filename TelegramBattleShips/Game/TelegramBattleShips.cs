@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Telegram.Bot.Types.ReplyMarkups;
 using System.Linq;
 using System.Timers;
+using DAL.Data;
+using DAL.Entities;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBattleShips.Game.Enums;
@@ -13,6 +15,7 @@ namespace TelegramBattleShips.Game
 {
     public class TelegramBattleShips : IDisposable
     {
+        private readonly TelegramDbContext _context;
         private const int ButtonsInRow = 5;
         private const int TimerIntervalMs = 15_000;
         private readonly Timer _notifyTimer = new Timer(TimerIntervalMs);
@@ -20,8 +23,9 @@ namespace TelegramBattleShips.Game
         private double _elapsedMs = 0;
         private bool _disposed;
 
-        public TelegramBattleShips(ITelegramBotClient bot, User user1)
+        public TelegramBattleShips(ITelegramBotClient bot, User user1, TelegramDbContext context)
         {
+            _context = context ?? throw new ArgumentNullException(nameof(context));
             Bot = bot ?? throw new ArgumentNullException(nameof(bot));
             Player1 = new Player(user1 ?? throw new ArgumentNullException(nameof(user1)));
 
@@ -113,6 +117,8 @@ namespace TelegramBattleShips.Game
                     activePlayerMessage = $"Вітаю з перемогою 😄, {ActivePlayer.Name}, флот гравця {PassivePlayer.Name} розгромлено!";
                     passivePlayerMessage = $"На жаль, гравець {ActivePlayer.Name} розгромив твій флот. Програш 🥺";
 
+                    await IncrementDbUserGamesWonAsync(user);
+
                     await FinalUpdateAsync();
                 }
                 else
@@ -144,6 +150,43 @@ namespace TelegramBattleShips.Game
                 await Task.Delay(1000);
                 await UpdateAsync();
             }
+
+            if (isHit)
+            {
+                await IncrementDbUserUnitsDestroyedAsync(user);
+            }
+        }
+
+        private async Task IncrementDbUserGamesWonAsync(User user)
+        {
+            var dbUser = _context.TelegramUsers.FirstOrDefault(u => u.UserId == user.Id);
+
+            if (dbUser == null)
+            {
+                var newUser = new TelegramUser(user);
+
+                dbUser = (await _context.TelegramUsers.AddAsync(newUser)).Entity;
+            }
+
+            dbUser.BattleShipGamesWon++;
+
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task IncrementDbUserUnitsDestroyedAsync(User user)
+        {
+            var dbUser = _context.TelegramUsers.FirstOrDefault(u => u.UserId == user.Id);
+
+            if (dbUser == null)
+            {
+                var newUser = new TelegramUser(user);
+
+                dbUser = (await _context.TelegramUsers.AddAsync(newUser)).Entity;
+            }
+
+            dbUser.ShipUnitsDestroyed++;
+
+            await _context.SaveChangesAsync();
         }
 
         public bool TryRecognizePlayer(User user, out Player player)
@@ -247,6 +290,8 @@ namespace TelegramBattleShips.Game
                 await FinalUpdateAsync();
                 await SendActivePlayerMessage($"На жаль, ти здався й отримав поразку! 😱 Переміг гравець {PassivePlayer.Name}");
                 await SendPassivePlayerMessage($"Вітаю, гравець {ActivePlayer.Name} здався, а тому ти отримав перемогу!");
+
+                await IncrementDbUserGamesWonAsync(PassivePlayer.TelegramUser);
 
                 await Task.Delay(5_000);
 

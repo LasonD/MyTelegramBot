@@ -75,6 +75,9 @@ namespace TelegramBotConsole
             var game = Games.FirstOrDefault(x => x.Key.Id == chat.Id).Value;
             switch (msgText.Split('@')[0])
             {
+                case "/start":
+                    await Bot.SendTextMessageAsync(chat, string.Join("\n", GameDispatcher.Commands));
+                    break;
                 case "/startgame":
                     if (game != null)
                         game.Dispose();

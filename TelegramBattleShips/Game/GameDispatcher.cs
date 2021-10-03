@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DAL;
 using DAL.Data;
+using DAL.Entities;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
@@ -18,7 +19,7 @@ namespace TelegramBattleShips.Game
         private const string StartGameCommand = "/startseabattle";
         private const string HitCommandPrefix = "/hit ";
         private const string BattleShipsLeaderBoardCommand = "/leaderboard";
-        private const string ClearCommand = "/clear";
+        private const string MyStatisticsCommand = "/mystatistics";
 
         private readonly TelegramDbContext _context = DbContextSingletone.GetContext();
         private readonly ITelegramBotClient _bot;
@@ -34,6 +35,8 @@ namespace TelegramBattleShips.Game
         private ConcurrentDictionary<User, TelegramBattleShips> Games { get; } = new ConcurrentDictionary<User, TelegramBattleShips>();
 
         private Dictionary<int, BlockingCollection<Message>> SentMessages { get; set; } = new Dictionary<int, BlockingCollection<Message>>();
+
+        public static string[] Commands => new[] { StartGameCommand, BattleShipsLeaderBoardCommand, MyStatisticsCommand };
 
         private async void OnMessageHandler(object sender, MessageEventArgs e)
         {
@@ -58,6 +61,48 @@ namespace TelegramBattleShips.Game
             {
                 await ProcessLeaderBoardCommandAsync(user);
             }
+
+            if (text.Equals(MyStatisticsCommand, StringComparison.OrdinalIgnoreCase))
+            {
+                await ProcessMyStatisticsCommandAsync(user);
+            }
+        }
+
+        private async Task ProcessMyStatisticsCommandAsync(User user)
+        {
+            var userWithPos = _context
+                .TelegramUsers
+                .OrderByDescending(u => u.BattleShipGamesWon)
+                .ThenByDescending(u => u.ShipUnitsDestroyed)
+                .AsEnumerable()
+                .Select((u, i) => new {u, i})
+                .FirstOrDefault(x => x.u.UserId == user.Id);
+
+            TelegramUser dbUser;
+            int pos;
+            int totalUsers;
+
+            if (userWithPos == null)
+            {
+                var newUser = new TelegramUser(user);
+
+                dbUser = (await _context.TelegramUsers.AddAsync(newUser)).Entity;
+                pos = _context.TelegramUsers.Count();
+                totalUsers = pos;
+            }
+            else
+            {
+                dbUser = userWithPos.u;
+                pos = userWithPos.i + 1;
+                totalUsers = _context.TelegramUsers.Count();
+            }
+
+            var gamesWonTotal = dbUser.BattleShipGamesWon + dbUser.EnemySurrendedWons;
+
+            await SendMessageAsync(user, $"<b>Твоя статистика:</b>\n" +
+                                         $"\t   <b>{dbUser.ShipUnitsDestroyed}</b> ворожих юнітів знищено;\n" +
+                                         $"\t   <b>{gamesWonTotal}</b> ігор виграно{(dbUser.EnemySurrendedWons > 0 ? $" (з них {dbUser.EnemySurrendedWons} через здачу противника)" : "")};\n" +
+                                         $"\t   <b>Ти на {pos} позиції серед {totalUsers} гравців</b>", ParseMode.Html);
         }
 
         private async Task ProcessLeaderBoardCommandAsync(User user)
@@ -65,21 +110,22 @@ namespace TelegramBattleShips.Game
             var leaders = _context
                 .TelegramUsers
                 .Where(x => x.BattleShipGamesWon > 0 || x.ShipUnitsDestroyed > 0)
-                .OrderByDescending(x => x.BattleShipGamesWon)
-                .ThenByDescending(x => x.ShipUnitsDestroyed)
+                .OrderByDescending(x => x.ShipUnitsDestroyed)
+                .ThenByDescending(x => x.BattleShipGamesWon + x.EnemySurrendedWons)
                 .Take(10)
                 .AsEnumerable()
-                .Select((x, i) => $"<b>{PlaceEmoji[i]}. {x.FirstName} {x.LastName}</b>\tворожих юнітів знищено: <b>{x.ShipUnitsDestroyed}</b>\tвиграшів: <b>{x.BattleShipGamesWon}</b>")
-                .Prepend("Топ 10 гравців")
+                .Select((x, i) => $"<b>{PlaceEmoji[i]} {x.FirstName} {x.LastName}</b>\t\nВорожих юнітів знищено: <b>{x.ShipUnitsDestroyed}</b>" +
+                                  $"\t\nВиграшів: <b>{x.BattleShipGamesWon + x.EnemySurrendedWons}</b> {(x.EnemySurrendedWons > 0 ? $" (з них <b>{x.EnemySurrendedWons}</b> через здачу противника)" : "")}\n")
+                .Prepend("<b><i>🏆Топ 10 гравців🏆</i></b>\n")
                 .ToList();
 
-            if (!leaders.Any())
+            if (leaders.Count == 1)
             {
-                await _bot.SendTextMessageAsync(user.Id, "Таблиця лідерів поки що пуста.\nТи можеш це змінити!😊");
+                await _bot.SendTextMessageAsync(user.Id, "Таблиця лідерів поки що пуста.\nТи можеш це змінити!😉");
             }
             else
             {
-                await _bot.SendTextMessageAsync(user.Id, string.Join("\n", leaders), ParseMode.Html);
+                await SendMessageAsync(user.Id, string.Join("\n", leaders), ParseMode.Html);
             }
         }
 
@@ -127,7 +173,7 @@ namespace TelegramBattleShips.Game
                     Games[user] = newGame;
                     newGame.Finish += OnGameFinishedHandler;
 
-                    //await NotifyAboutWaitingGameAsync(user);
+                    await NotifyAboutWaitingGameAsync(user);
                 }
             }
             finally
@@ -178,39 +224,50 @@ namespace TelegramBattleShips.Game
 
         private async Task NotifyAboutWaitingGameAsync(User waitingPlayer)
         {
-            foreach (var user in _context.TelegramUsers.Where(u => !u.UserId.Equals(waitingPlayer.Id)))
+            foreach (var user in _context.TelegramUsers.AsEnumerable().Where(u => !u.UserId.Equals(waitingPlayer.Id) && Games.All(kvp => kvp.Key.Id != u.UserId)))
             {
                 try
                 {
                     await SendMessageAsync((int)user.UserId,
                         $"Користувач {waitingPlayer.FirstName} {waitingPlayer.LastName} очікує " +
-                        $"іншого гравця в морський бій. Щоб приєднатись, введи команду {StartGameCommand}");
+                        $"іншого гравця в морський бій.\nЩоб приєднатись, введи команду {StartGameCommand}");
                 }
                 catch
                 {
-                    //
+                    // TODO: add logging
                 }
             }
         }
 
         private async Task ProcessHitCommandAsync(User user, string command)
         {
-            if (!Games.ContainsKey(user))
+            try
             {
-                await SendMessageAsync(user, "Ти не маєш розпочатої гри!");
-                return;
+                await _semaphore.WaitAsync();
+
+                if (!Games.ContainsKey(user))
+                {
+                    await SendMessageAsync(user, "Ти не маєш розпочатої гри!");
+                    return;
+                }
+
+                await DeleteSentMessagesAsync(user);
+
+                var game = Games[user];
+
+                await game.HitAsync(user, command);
             }
-
-            var game = Games[user];
-
-            await game.HitAsync(user, command);
+            finally
+            {
+                _semaphore.Release();
+            }
         }
 
-        private Task SendMessageAsync(User user, string text) => SendMessageAsync(user.Id, text);
+        private Task SendMessageAsync(User user, string text, ParseMode parseMode = ParseMode.Default) => SendMessageAsync(user.Id, text, parseMode);
 
-        private async Task SendMessageAsync(int id, string text)
+        private async Task SendMessageAsync(int id, string text, ParseMode parseMode = ParseMode.Default)
         {
-            var message = await _bot.SendTextMessageAsync(id, text);
+            var message = await _bot.SendTextMessageAsync(id, text, parseMode);
 
             SentMessages.TryAdd(id, new BlockingCollection<Message>());
 

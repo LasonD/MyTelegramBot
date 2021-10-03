@@ -30,7 +30,7 @@ namespace TelegramBattleShips.Game
             Player1 = new Player(user1 ?? throw new ArgumentNullException(nameof(user1)));
 
             SendImageMessageAsync(Player1, Player1.GetFieldImageStreamAsync(FieldView.Full).Result, "Твій флот").Wait();
-            SendTextMessageAsync(Player1, "Очікується другий грaвець...").Wait();
+            SendTextMessageAsync(Player1, "Очікується інший грaвець...").Wait();
 
             _notifyTimer.Elapsed += NotifyTimer_Elapsed;
         }
@@ -117,7 +117,7 @@ namespace TelegramBattleShips.Game
                     activePlayerMessage = $"Вітаю з перемогою 😄, {ActivePlayer.Name}, флот гравця {PassivePlayer.Name} розгромлено!";
                     passivePlayerMessage = $"На жаль, гравець {ActivePlayer.Name} розгромив твій флот. Програш 🥺";
 
-                    await IncrementDbUserGamesWonAsync(user);
+                    await IncrementDbUserStatisticsAsync(user, StatisticsCounter.GamesWon);
 
                     await FinalUpdateAsync();
                 }
@@ -153,11 +153,11 @@ namespace TelegramBattleShips.Game
 
             if (isHit)
             {
-                await IncrementDbUserUnitsDestroyedAsync(user);
+                await IncrementDbUserStatisticsAsync(user, StatisticsCounter.UnitsDestroyed);
             }
         }
 
-        private async Task IncrementDbUserGamesWonAsync(User user)
+        private async Task IncrementDbUserStatisticsAsync(User user, StatisticsCounter counter)
         {
             var dbUser = _context.TelegramUsers.FirstOrDefault(u => u.UserId == user.Id);
 
@@ -168,23 +168,20 @@ namespace TelegramBattleShips.Game
                 dbUser = (await _context.TelegramUsers.AddAsync(newUser)).Entity;
             }
 
-            dbUser.BattleShipGamesWon++;
-
-            await _context.SaveChangesAsync();
-        }
-
-        private async Task IncrementDbUserUnitsDestroyedAsync(User user)
-        {
-            var dbUser = _context.TelegramUsers.FirstOrDefault(u => u.UserId == user.Id);
-
-            if (dbUser == null)
+            switch (counter)
             {
-                var newUser = new TelegramUser(user);
-
-                dbUser = (await _context.TelegramUsers.AddAsync(newUser)).Entity;
+                case StatisticsCounter.UnitsDestroyed:
+                    dbUser.ShipUnitsDestroyed++;
+                    break;
+                case StatisticsCounter.GamesWon:
+                    dbUser.BattleShipGamesWon++;
+                    break;
+                case StatisticsCounter.EnemySurrendedGamesWon:
+                    dbUser.EnemySurrendedWons++;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(counter), counter, null);
             }
-
-            dbUser.ShipUnitsDestroyed++;
 
             await _context.SaveChangesAsync();
         }
@@ -230,20 +227,33 @@ namespace TelegramBattleShips.Game
 
         private async Task SendTextMessageAsync(Player player, string text)
         {
-            await DeletePlayerMessageAsync(player);
+            try
+            {
+                await DeletePlayerMessageAsync(player);
+            } catch {}
 
-            var message = await Bot.SendTextMessageAsync(player.UserId, text);
+            try
+            {
+                var message = await Bot.SendTextMessageAsync(player.UserId, text);
 
-            player.LastSentTextMessage = message;
+                player.LastSentTextMessage = message;
+            }
+            catch { }
         }
 
         private async Task SendImageMessageAsync(Player player, Stream stream, string caption, IReplyMarkup replyMarkup = null)
         {
-            await DeletePlayerMessageAsync(player, withImage: true);
+            try
+            {
+                await DeletePlayerMessageAsync(player, withImage: true);
+            } catch {}
 
-            var message = await Bot.SendPhotoAsync(player.UserId, stream, caption, replyMarkup: replyMarkup);
+            try
+            {
+                var message = await Bot.SendPhotoAsync(player.UserId, stream, caption, replyMarkup: replyMarkup);
 
-            player.LastSentImageMessage = message;
+                player.LastSentImageMessage = message;
+            } catch {}
         }
 
         private async Task DeletePlayerMessageAsync(Player player, bool withImage = false)
@@ -291,7 +301,7 @@ namespace TelegramBattleShips.Game
                 await SendActivePlayerMessage($"На жаль, ти здався й отримав поразку! 😱 Переміг гравець {PassivePlayer.Name}");
                 await SendPassivePlayerMessage($"Вітаю, гравець {ActivePlayer.Name} здався, а тому ти отримав перемогу!");
 
-                await IncrementDbUserGamesWonAsync(PassivePlayer.TelegramUser);
+                await IncrementDbUserStatisticsAsync(PassivePlayer.TelegramUser, StatisticsCounter.EnemySurrendedGamesWon);
 
                 await Task.Delay(5_000);
 
@@ -332,6 +342,13 @@ namespace TelegramBattleShips.Game
 
             await DeletePlayerMessageAsync(ActivePlayer, true);
             await DeletePlayerMessageAsync(PassivePlayer, true);
+        }
+
+        private enum StatisticsCounter
+        {
+            UnitsDestroyed = 0,
+            GamesWon = 1,
+            EnemySurrendedGamesWon = 2
         }
     }
 }

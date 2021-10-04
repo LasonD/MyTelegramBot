@@ -293,21 +293,3 @@ namespace TelegramBotConsole.Game
 
     public enum GameState { Started, Head, Body, FirstHand, SecondHand, FirstLeg, Gameover, Victory }
 }
-
-//private async Task RefreshLastMessageAsync(string message)
-//{
-//    if (LastMessage != null)
-//    {
-//        await Bot.DeleteMessageAsync(Chat, LastMessage.MessageId);
-//        LastMessage = null;
-//    }
-
-//    LastMessage = await Bot.SendTextMessageAsync(Chat, message, ParseMode.Html, replyMarkup: GetTryInlineButtons());
-//}
-
-//response = $"Ура! {player.User.FirstName}, {(player.Gender == Gender.Female ? "врятувала" : "врятував")} чоловічка! \U0001F603" +
-//    $"Найрезультативнішим гравцем {(player.Gender == Gender.Female ? "була" : "був")} <b>" +
-//    $"{player.User.FirstName}</b>, вгадавши {LetterNumSpell(player.Guessed)} \U0001F451";
-
-//response = $"Вітаю, {player.User.FirstName}, ти {(player.Gender == Gender.Female ? "вгадала" : "вгадав")} " +
-//    $"{matchedCount} {(matchedCount == 1 ? "літеру" : "літери")}! {StreakMessage(player)} Можеш спробувати ще раз. Залишилось {LetterNumSpell(RemainingCount)}.";

@@ -33,22 +33,9 @@ namespace TelegramBattleShips.Game
             SendImageMessageAsync(Player1, Player1.GetFieldImageStreamAsync(FieldView.Full).Result, "Твій флот").Wait();
             SendTextMessageAsync(Player1, "Очікується інший грaвець...").Wait();
 
-            _notifyTimer.Elapsed += NotifyTimer_Elapsed;
+            _notifyTimer.Elapsed += OnNotifyTimerElapsed;
             _joinTimeoutTimer.Start();
             _joinTimeoutTimer.Elapsed += OnJoinTimeoutReachedHandler;
-        }
-
-        private async void OnJoinTimeoutReachedHandler(object sender, ElapsedEventArgs e)
-        {
-            IsFinished = true;
-            _joinTimeoutTimer.Elapsed -= OnJoinTimeoutReachedHandler;
-            _joinTimeoutTimer.Enabled = false;
-
-            await SendTextMessageAsync(Player1, "В даний час немає активних гравців. Спробуй пізніше.");
-
-            await Task.Delay(5_000);
-
-            Finish?.Invoke(this, EventArgs.Empty);
         }
 
         public event EventHandler Finish;
@@ -309,7 +296,20 @@ namespace TelegramBattleShips.Game
             }
         }
 
-        private async void NotifyTimer_Elapsed(object sender, ElapsedEventArgs e)
+        private async void OnJoinTimeoutReachedHandler(object sender, ElapsedEventArgs e)
+        {
+            IsFinished = true;
+            _joinTimeoutTimer.Elapsed -= OnJoinTimeoutReachedHandler;
+            _joinTimeoutTimer.Enabled = false;
+
+            await SendTextMessageAsync(Player1, "В даний час немає активних гравців. Спробуй пізніше.");
+
+            await Task.Delay(5_000);
+
+            Finish?.Invoke(this, EventArgs.Empty);
+        }
+
+        private async void OnNotifyTimerElapsed(object sender, ElapsedEventArgs e)
         {
             _elapsedMs += _notifyTimer.Interval;
 
@@ -356,7 +356,7 @@ namespace TelegramBattleShips.Game
 
             _notifyTimer.Stop();
             _notifyTimer.Dispose();
-            _notifyTimer.Elapsed -= NotifyTimer_Elapsed;
+            _notifyTimer.Elapsed -= OnNotifyTimerElapsed;
 
             await DeletePlayerMessageAsync(ActivePlayer, true);
             await DeletePlayerMessageAsync(PassivePlayer, true);

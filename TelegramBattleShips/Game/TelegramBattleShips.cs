@@ -208,22 +208,22 @@ namespace TelegramBattleShips.Game
 
         private async Task UpdateAsync(string activePlayerCaption = "Флот гравця {0}", string passivePlayerCaption = "Твій флот. Очікується хід гравця {0}")
         {
+            await DeletePlayerMessageAsync(ActivePlayer, true);
+            await DeletePlayerMessageAsync(PassivePlayer, true);
+
             await SendImageMessageAsync(ActivePlayer, await GetPassivePlayerImageAsync(FieldView.Restricted), 
                 activePlayerCaption.Replace("{0}", PassivePlayer.Name), GetAvailableHitsKeyboard());
 
             await SendImageMessageAsync(PassivePlayer, await GetPassivePlayerImageAsync(FieldView.Full), 
                 passivePlayerCaption.Replace("{0}", ActivePlayer.Name));
-
-            await DeletePlayerMessageAsync(ActivePlayer, true);
-            await DeletePlayerMessageAsync(PassivePlayer, true);
         }
 
         private async Task FinalUpdateAsync()
         {
+            await DeletePlayerMessageAsync(PassivePlayer, true);
+
             await SendImageMessageAsync(PassivePlayer, await GetActivePlayerFieldImageAsync(FieldView.Full),
                 $"Флот гравця {ActivePlayer.Name}");
-
-            await DeletePlayerMessageAsync(PassivePlayer, true);
         }
 
         private Task SendActivePlayerMessage(string message) => SendTextMessageAsync(ActivePlayer, message);

@@ -41,6 +41,8 @@ namespace TelegramBattleShips.Game
         private async void OnJoinTimeoutReachedHandler(object sender, ElapsedEventArgs e)
         {
             IsFinished = true;
+            _joinTimeoutTimer.Elapsed -= OnJoinTimeoutReachedHandler;
+            _joinTimeoutTimer.Enabled = false;
 
             await SendTextMessageAsync(Player1, "В даний час немає активних гравців. Спробуй пізніше.");
 

@@ -20,7 +20,8 @@ namespace TelegramBotConsole
     {
         private static readonly IConfiguration Configuration = new ConfigurationBuilder()
             .AddJsonFile("appsettings.json")
-            .Build();
+            .Build()
+            .SetupDbContextString();
 
         private static TelegramDbContext Context => DbContextSingletone.GetContext();
         private static readonly string Token = Configuration.GetSection("TelegramBotToken").Value;
@@ -144,10 +145,7 @@ namespace TelegramBotConsole
             await context.SaveChangesAsync();
         }
 
-        public void Dispose()
-        {
-
-        }
+        public void Dispose() => Dispatcher.Dispose();
     }
 }
 

@@ -6,15 +6,31 @@ namespace DAL
 {
     public static class DbContextSingletone
     {
-        private static readonly IConfiguration Configuration = new ConfigurationBuilder()
-            .AddJsonFile("appsettings.json")
-            .Build();
+        private const string ConnectionStringName = "TelegramBotDatabase";
+        private static readonly object _locker = new object();
+        private static string _connection;
 
-        private static Lazy<TelegramDbContext> _context = new Lazy<TelegramDbContext>(() =>
-            new TelegramDbContext("Server=(localdb)\\mssqllocaldb;Database=TelegramBotDatabase;Trusted_Connection=True;"));//Configuration.GetSection("TelegramBotToken").Value));
+        public static bool IsSet => _connection != null;
 
-        public static TelegramDbContext GetContext() =>
-            new TelegramDbContext(
-                "Server=(localdb)\\mssqllocaldb;Database=TelegramBotDatabase;Trusted_Connection=True;"); //_context.Value;
+        public static void SetConnectionString(string connection)
+        {
+            lock (_locker)
+            {
+                if (_connection != null) throw new InvalidOperationException("Connection is already set");
+
+                _connection = connection;
+            }
+        }
+
+        private static readonly Lazy<TelegramDbContext> _context = new Lazy<TelegramDbContext>(() => new TelegramDbContext(_connection));//Configuration.GetSection("TelegramBotToken").Value));
+
+        public static TelegramDbContext GetContext() => _context.Value;
+
+        public static IConfiguration SetupDbContextString(this IConfiguration configuration)
+        {
+            _connection = configuration.GetConnectionString(ConnectionStringName);
+
+            return configuration;
+        }
     }
 }

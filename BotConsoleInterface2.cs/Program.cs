@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Args;
@@ -9,7 +8,7 @@ namespace BotConsoleInterface2
 {
     class Program : IDisposable
     {
-        private static readonly string Token = "1201353955:AAHGjdefg5lxS8jTNMqktyHTe1CAW9U6nKc";
+        private static readonly string Token = ""; // don't touch it;
         private static readonly ITelegramBotClient Bot = new TelegramBotClient(Token);
 
         static void Main(string[] args)

@@ -230,44 +230,44 @@ namespace TelegramBattleShips.Game
 
         private Task SendPassivePlayerMessage(string message) => SendTextMessageAsync(PassivePlayer, message);
 
-        private async Task SendTextMessageAsync(Player player, string text, bool deleteOld = true)
+        private async Task SendTextMessageAsync(Player player, string text)
         {
             try
             {
-                player.OldSentTextMessage = player.LastSentTextMessage;
+                await DeletePlayerMessageAsync(player);
+            } catch {}
 
-                player.LastSentTextMessage = await Bot.SendTextMessageAsync(player.UserId, text);
+            try
+            {
+                var message = await Bot.SendTextMessageAsync(player.UserId, text);
+
+                player.LastSentTextMessage = message;
             }
             catch { }
-
-            if (deleteOld)
-            {
-                try
-                {
-                    await DeletePlayerMessageAsync(player);
-                }
-                catch { }
-            }
         }
 
         private async Task SendImageMessageAsync(Player player, Stream stream, string caption, IReplyMarkup replyMarkup = null)
         {
             try
             {
-                player.OldSentImageMessage = player.LastSentImageMessage;
+                await DeletePlayerMessageAsync(player, withImage: true);
+            } catch {}
 
-                player.LastSentImageMessage = await Bot.SendPhotoAsync(player.UserId, stream, caption, replyMarkup: replyMarkup);
-            } 
-            catch { }
+            try
+            {
+                var message = await Bot.SendPhotoAsync(player.UserId, stream, caption, replyMarkup: replyMarkup);
+
+                player.LastSentImageMessage = message;
+            } catch {}
         }
 
         private async Task DeletePlayerMessageAsync(Player player, bool withImage = false)
         {
-            if (player?.OldSentImageMessage != null)
+            if (player?.LastSentTextMessage != null)
             {
                 try
                 {
-                    await Bot.DeleteMessageAsync(player.UserId, player.OldSentImageMessage.MessageId);
+                    await Bot.DeleteMessageAsync(player.UserId, player.LastSentTextMessage.MessageId);
                 }
                 catch
                 {
@@ -275,15 +275,15 @@ namespace TelegramBattleShips.Game
                 }
                 finally
                 {
-                    player.OldSentTextMessage = null;
+                    player.LastSentTextMessage = null;
                 }
             }
 
-            if (player != null && withImage && player.OldSentImageMessage != null)
+            if (player != null && withImage && player.LastSentImageMessage != null)
             {
                 try
                 {
-                    await Bot.DeleteMessageAsync(player.UserId, player.OldSentImageMessage.MessageId);
+                    await Bot.DeleteMessageAsync(player.UserId, player.LastSentImageMessage.MessageId);
                 }
                 catch
                 {
@@ -291,7 +291,7 @@ namespace TelegramBattleShips.Game
                 }
                 finally
                 {
-                    player.OldSentImageMessage = null;
+                    player.LastSentImageMessage = null;
                 }
             }
         }

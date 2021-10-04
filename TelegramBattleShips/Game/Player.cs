@@ -21,10 +21,6 @@ namespace TelegramBattleShips.Game
 
         public User TelegramUser { get; private set; }
 
-        public Message OldSentImageMessage { get; set; }
-
-        public Message OldSentTextMessage { get; set; }
-
         public Message LastSentImageMessage { get; set; }
 
         public Message LastSentTextMessage { get; set; }

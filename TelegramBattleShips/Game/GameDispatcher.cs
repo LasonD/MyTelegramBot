@@ -187,7 +187,7 @@ namespace TelegramBattleShips.Game
                     Games[user] = newGame;
                     newGame.Finish += OnGameFinishedHandler;
 
-                    //await NotifyAboutWaitingGameAsync(user);
+                    await NotifyAboutWaitingGameAsync(user);
                 }
             }
             finally
